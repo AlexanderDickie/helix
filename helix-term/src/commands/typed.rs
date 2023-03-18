@@ -1300,14 +1300,16 @@ fn lsp_workspace_command(
         return Ok(());
     }
     let doc = doc!(cx.editor);
-    let language_servers =
-        doc.language_servers_with_feature(LanguageServerFeature::WorkspaceCommand);
-    let (language_server_id, options) = match language_servers.iter().find_map(|ls| {
-        ls.capabilities()
-            .execute_command_provider
-            .as_ref()
-            .map(|options| (ls.id(), options))
-    }) {
+    let id_options = doc
+        .language_servers_with_feature(LanguageServerFeature::WorkspaceCommand)
+        .find_map(|ls| {
+            ls.capabilities()
+                .execute_command_provider
+                .as_ref()
+                .map(|options| (ls.id(), options))
+        });
+
+    let (language_server_id, options) = match id_options {
         Some(id_options) => id_options,
         None => {
             cx.editor.set_status(
@@ -1316,6 +1318,7 @@ fn lsp_workspace_command(
             return Ok(());
         }
     };
+
     if args.is_empty() {
         let commands = options
             .commands
@@ -1415,7 +1418,6 @@ fn lsp_stop(
     // I'm not sure if this is really what we want
     let ls_shutdown_names = doc
         .language_servers()
-        .iter()
         .map(|ls| ls.name())
         .collect::<Vec<_>>();
 
@@ -1429,7 +1431,6 @@ fn lsp_stop(
         .filter_map(|doc| {
             let doc_active_ls_ids: Vec<_> = doc
                 .language_servers()
-                .iter()
                 .filter(|ls| !ls_shutdown_names.contains(&ls.name()))
                 .map(|ls| ls.id())
                 .collect();
@@ -1442,7 +1443,7 @@ fn lsp_stop(
                 .map(Clone::clone)
                 .collect();
 
-            if active_clients.len() != doc.language_servers().len() {
+            if active_clients.len() != doc.language_servers().count() {
                 Some((doc.id(), active_clients))
             } else {
                 None
@@ -1455,7 +1456,6 @@ fn lsp_stop(
 
         let stopped_clients: Vec<_> = doc
             .language_servers()
-            .iter()
             .filter(|ls| {
                 !active_clients
                     .iter()

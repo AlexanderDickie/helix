@@ -5,7 +5,7 @@ use futures_util::future::BoxFuture;
 use futures_util::FutureExt;
 use helix_core::auto_pairs::AutoPairs;
 use helix_core::doc_formatter::TextFormat;
-use helix_core::syntax::{Highlight, LanguageServerFeature, LanguageServerFeatureConfiguration};
+use helix_core::syntax::{Highlight, LanguageServerFeature};
 use helix_core::text_annotations::{InlineAnnotation, TextAnnotations};
 use helix_core::Range;
 use helix_vcs::{DiffHandle, DiffProviderRegistry};
@@ -609,7 +609,6 @@ impl Document {
         // finds first language server that supports formatting and then formats
         let (offset_encoding, request) = self
             .language_servers_with_feature(LanguageServerFeature::Format)
-            .iter()
             .find_map(|language_server| {
                 let offset_encoding = language_server.offset_encoding();
                 let request = language_server.text_document_formatting(
@@ -1257,54 +1256,24 @@ impl Document {
         self.version
     }
 
-    /// Language servers that have been initialized.
-    pub fn language_servers(&self) -> Vec<&helix_lsp::Client> {
+    pub fn language_servers(&self) -> impl Iterator<Item = &helix_lsp::Client> {
         self.language_servers
             .iter()
             .filter_map(|l| if l.is_initialized() { Some(&**l) } else { None })
-            .collect()
     }
 
     // TODO filter also based on LSP capabilities?
     pub fn language_servers_with_feature(
         &self,
         feature: LanguageServerFeature,
-    ) -> Vec<&helix_lsp::Client> {
-        let language_servers = self.language_servers();
-
-        let language_config = match self.language_config() {
-            Some(language_config) => language_config,
-            None => return Vec::new(),
-        };
-
-        // O(n^2) but since language_servers will be of very small length,
-        // I don't see the necessity to optimize
-        language_config
-            .language_servers
-            .iter()
-            .filter_map(|c| match c {
-                LanguageServerFeatureConfiguration::Simple(name) => language_servers
-                    .iter()
-                    .find(|ls| ls.name() == name)
-                    .copied(),
-                LanguageServerFeatureConfiguration::Features {
-                    only_features,
-                    except_features,
-                    name,
-                } => {
-                    if (only_features.is_empty() || only_features.contains(&feature))
-                        && !except_features.contains(&feature)
-                    {
-                        language_servers
-                            .iter()
-                            .find(|ls| ls.name() == name)
-                            .copied()
-                    } else {
-                        None
-                    }
-                }
-            })
-            .collect()
+    ) -> impl Iterator<Item = &helix_lsp::Client> {
+        self.language_servers().filter(move |server| {
+            self.language_config()
+                .and_then(|config| config.language_servers.get(server.name()))
+                .map_or(false, |server_features| {
+                    server_features.has_feature(feature)
+                })
+        })
     }
 
     pub fn diff_handle(&self) -> Option<&DiffHandle> {
@@ -1430,7 +1399,6 @@ impl Document {
     pub fn shown_diagnostics(&self) -> impl Iterator<Item = &Diagnostic> + DoubleEndedIterator {
         let ls_ids: HashSet<_> = self
             .language_servers_with_feature(LanguageServerFeature::Diagnostics)
-            .iter()
             .map(|ls| ls.id())
             .collect();
         self.diagnostics
