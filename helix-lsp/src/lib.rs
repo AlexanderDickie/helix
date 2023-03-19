@@ -10,7 +10,9 @@ pub use lsp::{Position, Url};
 pub use lsp_types as lsp;
 
 use futures_util::stream::select_all::SelectAll;
-use helix_core::syntax::{LanguageConfiguration, LanguageServerConfiguration};
+use helix_core::syntax::{
+    LanguageConfiguration, LanguageServerConfiguration, LanguageServerFeatures,
+};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use std::{
@@ -23,7 +25,7 @@ use thiserror::Error;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 pub type Result<T> = core::result::Result<T, Error>;
-type LanguageServerName = String;
+pub type LanguageServerName = String;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -671,9 +673,9 @@ impl Registry {
     ) -> Result<Vec<Arc<Client>>> {
         language_config
             .language_servers
-            .keys()
-            .filter_map(|name| {
-                #[allow(clippy::map_entry)]
+            .iter()
+            .filter_map(|LanguageServerFeatures { name, .. }| {
+                // #[allow(clippy::map_entry)]
                 if self.inner.contains_key(name) {
                     let client = match self.start_client(
                         name.clone(),
@@ -722,17 +724,20 @@ impl Registry {
         doc_path: Option<&std::path::PathBuf>,
         root_dirs: &[PathBuf],
         enable_snippets: bool,
-    ) -> Result<Vec<Arc<Client>>> {
+    ) -> Result<HashMap<LanguageServerName, Arc<Client>>> {
         language_config
             .language_servers
-            .keys()
-            .map(|name| {
+            .iter()
+            .map(|LanguageServerFeatures { name, .. }| {
                 if let Some(clients) = self.inner.get_mut(name) {
+                    // clients.find(
+
                     if let Some((_, client)) = clients.iter_mut().enumerate().find(|(i, client)| {
                         client.try_add_doc(&language_config.roots, root_dirs, doc_path, *i == 0)
                     }) {
-                        return Ok(client.clone());
+                        return Ok((name.to_owned(), client.clone()));
                     }
+                    // return Ok((name.clone(), clients.clone()));
                 }
                 let client = self.start_client(
                     name.clone(),
@@ -743,7 +748,7 @@ impl Registry {
                 )?;
                 let clients = self.inner.entry(name.clone()).or_default();
                 clients.push(client.clone());
-                Ok(client)
+                Ok((name.clone(), client))
             })
             .collect()
     }
