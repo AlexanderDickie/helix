@@ -387,7 +387,7 @@ pub fn symbol_picker(cx: &mut Context) {
 
     if futures.is_empty() {
         cx.editor
-            .set_error("No Language server does support document symbols");
+            .set_error("No configured language server supports document symbols");
         return;
     }
 
@@ -431,7 +431,7 @@ pub fn workspace_symbol_picker(cx: &mut Context) {
             .collect();
 
         if futures.is_empty() {
-            editor.set_error("No Language server does support workspace symbols");
+            editor.set_error("No configured language server supports workspace symbols");
         }
 
         async move {
@@ -661,7 +661,7 @@ pub fn code_action(cx: &mut Context) {
 
     if futures.is_empty() {
         cx.editor
-            .set_error("No Language server does support code actions");
+            .set_error("No configured language server supports code actions");
         return;
     }
 
@@ -1041,7 +1041,8 @@ where
             },
         );
     } else {
-        cx.editor.set_error("No language server supports {feature}");
+        cx.editor
+            .set_error("No configured language server supports {feature}");
     }
 }
 
@@ -1093,7 +1094,7 @@ pub fn goto_reference(cx: &mut Context) {
         );
     } else {
         cx.editor
-            .set_error("No language server supports goto-reference");
+            .set_error("No configured language server supports goto-reference");
     }
 }
 
@@ -1125,7 +1126,7 @@ pub fn signature_help_impl(cx: &mut Context, invoked: SignatureHelpInvoked) {
             // automatically on backspace, trigger characters, etc.
             if invoked == SignatureHelpInvoked::Manual {
                 cx.editor
-                    .set_error("No language server supports signature-help");
+                    .set_error("No configured language server supports signature-help");
             }
             return;
         }
@@ -1256,7 +1257,8 @@ pub fn hover(cx: &mut Context) {
     let future = match request {
         Some(future) => future,
         None => {
-            cx.editor.set_error("No language server supports hover");
+            cx.editor
+                .set_error("No configured language server supports hover");
             return;
         }
     };
@@ -1380,7 +1382,7 @@ pub fn rename_symbol(cx: &mut Context) {
                     }
                 } else {
                     cx.editor
-                        .set_error("No language server supports symbol renaming");
+                        .set_error("No configured language server supports symbol renaming");
                 }
             },
         )
@@ -1446,7 +1448,7 @@ pub fn select_references_to_symbol_under_cursor(cx: &mut Context) {
         Some(future_offset_encoding) => future_offset_encoding,
         None => {
             cx.editor
-                .set_error("No language server supports document-highlight");
+                .set_error("No configured language server supports document-highlight");
             return;
         }
     };
