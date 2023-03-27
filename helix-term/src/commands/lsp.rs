@@ -533,7 +533,6 @@ pub fn workspace_diagnostics_picker(cx: &mut Context) {
 
 struct CodeActionOrCommandItem {
     lsp_item: lsp::CodeActionOrCommand,
-    offset_encoding: OffsetEncoding,
     language_server_id: usize,
 }
 
@@ -635,9 +634,9 @@ pub fn code_action(cx: &mut Context) {
             };
             let code_action_request =
                 language_server.code_actions(doc.identifier(), range, code_action_context)?;
-            Some((code_action_request, offset_encoding, language_server_id))
+            Some((code_action_request, language_server_id))
         })
-        .map(|(request, offset_encoding, ls_id)| async move {
+        .map(|(request, ls_id)| async move {
             let json = request.await?;
             let response: Option<lsp::CodeActionResponse> = serde_json::from_value(json)?;
             let mut actions = match response {
@@ -693,7 +692,6 @@ pub fn code_action(cx: &mut Context) {
                 .into_iter()
                 .map(|lsp_item| CodeActionOrCommandItem {
                     lsp_item,
-                    offset_encoding,
                     language_server_id: ls_id,
                 })
                 .collect())
@@ -725,7 +723,11 @@ pub fn code_action(cx: &mut Context) {
 
                 // always present here
                 let action = action.unwrap();
-                let offset_encoding = action.offset_encoding;
+                let Some(language_server) = editor.language_servers.get_by_id(action.language_server_id) else {
+                    editor.set_error("Language Server disappeared");
+                    return;
+                };
+                let offset_encoding = language_server.offset_encoding();
 
                 match &action.lsp_item {
                     lsp::CodeActionOrCommand::Command(command) => {
