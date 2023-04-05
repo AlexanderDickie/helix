@@ -299,7 +299,7 @@ fn diag_picker(
         flat_diag.reserve(diags.len());
 
         for (diag, ls) in diags {
-            if let Some(ls) = cx.editor.language_servers.get_by_id(ls) {
+            if let Some(ls) = cx.editor.language_server_by_id(ls) {
                 flat_diag.push(PickerDiagnostic {
                     url: url.clone(),
                     diag,
@@ -723,7 +723,7 @@ pub fn code_action(cx: &mut Context) {
 
                 // always present here
                 let action = action.unwrap();
-                let Some(language_server) = editor.language_servers.get_by_id(action.language_server_id) else {
+                let Some(language_server) = editor.language_server_by_id(action.language_server_id) else {
                     editor.set_error("Language Server disappeared");
                     return;
                 };
@@ -770,8 +770,7 @@ pub fn execute_lsp_command(editor: &mut Editor, language_server_id: usize, cmd: 
     // the command is executed on the server and communicated back
     // to the client asynchronously using workspace edits
     let future = match editor
-        .language_servers
-        .get_by_id(language_server_id)
+        .language_server_by_id(language_server_id)
         .and_then(|language_server| language_server.command(cmd))
     {
         Some(future) => future,
