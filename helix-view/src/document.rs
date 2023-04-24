@@ -169,6 +169,15 @@ pub struct Document {
 
     diff_handle: Option<DiffHandle>,
     version_control_head: Option<Arc<ArcSwap<Box<str>>>>,
+
+    pub copilot_state: Arc<Mutex<Option<CopilotState>>>,
+}
+
+#[derive(Clone)]
+pub struct CopilotState {
+    pub response: copilot_types::CompletionResponse,
+    pub doc_at_req: Rope,
+    pub offset_encoding: helix_lsp::OffsetEncoding,
 }
 
 /// Inlay hints for a single `(Document, View)` combo.
@@ -457,7 +466,7 @@ where
     *mut_ref = f(mem::take(mut_ref));
 }
 
-use helix_lsp::{lsp, Client, LanguageServerName};
+use helix_lsp::{lsp, Client, LanguageServerName, copilot_types};
 use url::Url;
 
 impl Document {
@@ -496,6 +505,7 @@ impl Document {
             diff_handle: None,
             config,
             version_control_head: None,
+            copilot_state: Arc::new(Mutex::new(None)),
         }
     }
     pub fn default(config: Arc<dyn DynAccess<Config>>) -> Self {
@@ -1018,9 +1028,73 @@ impl Document {
                 if let Some(notify) = notify {
                     tokio::spawn(notify);
                 }
+
+                if language_server.name() == "copilot" {
+                    if let Some(document) = self.copilot_document(language_server) {
+                        let ls = self.language_servers.get("copilot").unwrap().clone();
+                        let copilot_state = self.copilot_state.clone();
+                        let doc_at_req = self.text().clone();
+
+                        tokio::spawn(async move {
+                            let future = match ls.copilot_completion(document) {
+                                Some(f) => f,
+                                None => return,
+                            };
+
+                            let response = match future.await {
+                                Ok(Some(r)) => r,
+                                _ => return,
+                            };
+                            
+                            // let transactions = 
+                            //     helix_lsp::util::generate_transactions_from_copilot_response(
+                            //         &doc,
+                            //         response,
+                            //         ls.offset_encoding()
+                            // );
+
+                            let mut state = copilot_state.lock();
+                            *state = Some(CopilotState {
+                                response,
+                                doc_at_req,
+                                offset_encoding: ls.offset_encoding(),
+                            });
+                        });
+                    }
+                }
             }
         }
         success
+    }
+
+    fn copilot_document(&self, copilot: &Client) 
+        -> Option<copilot_types::Document> {
+        if self.selections.len() != 1 {
+            return None;
+        }
+
+        let view_id = match self.selections().len() {
+            1 => *self.selections().iter().next().unwrap().0,
+            _ => return None,
+        };
+
+        let offset_encoding = copilot.offset_encoding(); //???
+        let position = self.position(view_id, offset_encoding);
+
+        Some( 
+            copilot_types::Document {
+                tab_size: self.tab_width(),
+                insert_spaces: true,
+                path: self.path()?.to_str()?.to_owned(),
+                indent_size: self.indent_width(),
+                version: 0,
+                relative_path: self.relative_path()?.to_str()?.to_owned(),
+                language_id: self.language_id()?.to_owned(),
+                position,
+                source: self.text().to_string(),
+                uri: self.url()?.to_string(),
+            }
+        )
     }
 
     /// Apply a [`Transaction`] to the [`Document`] to change its text.

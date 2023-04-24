@@ -293,6 +293,7 @@ impl MappableCommand {
         insert_mode, "Insert before selection",
         append_mode, "Append after selection",
         command_mode, "Enter command mode",
+        copilot_picker, "Open copilot picker",
         file_picker, "Open file picker",
         file_picker_in_current_buffer_directory, "Open file picker at current buffers's directory",
         file_picker_in_current_directory, "Open file picker at current working directory",
@@ -2417,6 +2418,41 @@ fn append_mode(cx: &mut Context) {
         )
     });
     doc.set_selection(view.id, selection);
+}
+
+pub fn copilot_picker(cx: &mut Context) {
+    use ui::copilot_picker::CopilotCompletionPicker;
+    use helix_view::document::CopilotState;
+
+    let (view, doc) = current!(cx.editor);
+
+    let state = doc.copilot_state.lock();
+    let copilot_state = match state.as_ref(){
+        None => return,
+        Some(copilot_state) => {
+            (*copilot_state).clone()
+        }
+    };
+    drop(state);
+    let CopilotState {response, doc_at_req, offset_encoding} = copilot_state;
+
+    if doc.text() != &doc_at_req {
+        return;
+    }
+
+    let transactions = helix_lsp::util::generate_transactions_from_copilot_response(
+        doc.text(),
+        response, 
+        offset_encoding,
+    );
+
+    match CopilotCompletionPicker::new(doc.text().clone(), transactions) {
+        None => return,
+        Some((picker, first_completion)) => {
+            doc.apply(&first_completion, view.id);
+            cx.push_layer(Box::new(picker));
+        } 
+    }
 }
 
 fn file_picker(cx: &mut Context) {

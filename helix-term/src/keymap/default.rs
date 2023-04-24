@@ -369,6 +369,8 @@ pub fn default() -> HashMap<Mode, Keymap> {
         "C-j" | "ret" => insert_newline,
         "tab" => insert_tab,
 
+        "C-n" => copilot_picker,
+
         "up" => move_visual_line_up,
         "down" => move_visual_line_down,
         "left" => move_char_left,
