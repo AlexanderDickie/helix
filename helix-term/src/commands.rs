@@ -29,7 +29,7 @@ use helix_core::{
     tree_sitter::Node,
     unicode::width::UnicodeWidthChar,
     visual_offset_from_block, Deletion, LineEnding, Position, Range, Rope, RopeGraphemes,
-    RopeReader, RopeSlice, Selection, SmallVec, Tendril, Transaction,
+    RopeReader, RopeSlice, Selection, SmallVec, Tendril, Transaction, coords_at_pos,
 };
 use helix_view::{
     clipboard::ClipboardType,
@@ -273,6 +273,10 @@ impl MappableCommand {
         page_down, "Move page down",
         half_page_up, "Move half page up",
         half_page_down, "Move half page down",
+        cursor_page_up, "Move cursor and page one page up",
+        cursor_page_down, "Move cursor and page one page down",
+        cursor_page_half_up, "Move cursor and page half page up",
+        cursor_page_half_down, "Move cursor and page half page down",
         select_all, "Select whole document",
         select_regex, "Select all regex matches inside selections",
         split_selection, "Split selections on regex matches",
@@ -1491,6 +1495,55 @@ fn switch_to_lowercase(cx: &mut Context) {
     });
 }
 
+pub fn scroll_page_and_cursor(cx: &mut Context, offset: usize, direction: Direction) {
+    use Direction::*;
+    let (view, doc) = current!(cx.editor);
+
+    let doc_text = doc.text().slice(..);
+    let viewport = view.inner_area(doc);
+    let text_fmt = doc.text_format(viewport.width, None);
+    let mut annotations = view.text_annotations(doc, None);
+
+    let offset = match direction {
+        Forward => offset as isize,
+        Backward => -(offset as isize),
+    };
+
+    let (view_next_anchor, view_next_offset) = char_idx_at_visual_offset(
+        doc_text,
+        view.offset.anchor,
+        view.offset.vertical_offset as isize + offset,
+        0,
+        &text_fmt,
+        &annotations,
+    );
+
+    if view.offset.anchor == view_next_anchor {
+        return;
+    }
+
+    let selection = doc.selection(view.id).clone().transform(|range| {
+            move_vertically_visual(
+                doc_text,
+                range,
+                direction,
+                offset.abs() as usize,
+                Movement::Move,
+                &text_fmt,
+                &mut annotations,
+            )
+        });
+
+    let primary_range_row =  coords_at_pos(doc_text, selection.primary().anchor).row;
+    if primary_range_row == doc_text.len_lines() - 1 {
+        return;
+    }
+
+    (view.offset.anchor, view.offset.vertical_offset) = (view_next_anchor, view_next_offset);
+    doc.set_selection(view.id, selection);
+    return;
+}
+
 pub fn scroll(cx: &mut Context, offset: usize, direction: Direction) {
     use Direction::*;
     let config = cx.editor.config();
@@ -1590,6 +1643,30 @@ fn half_page_down(cx: &mut Context) {
     let view = view!(cx.editor);
     let offset = view.inner_height() / 2;
     scroll(cx, offset, Direction::Forward);
+}
+
+fn cursor_page_up(cx: &mut Context) {
+    let view = view!(cx.editor);
+    let offset = view.inner_height();
+    scroll_page_and_cursor(cx, offset, Direction::Backward);
+}
+
+fn cursor_page_down(cx: &mut Context) {
+    let view = view!(cx.editor);
+    let offset = view.inner_height();
+    scroll_page_and_cursor(cx, offset, Direction::Forward);
+}
+
+fn cursor_page_half_up(cx: &mut Context) {
+    let view = view!(cx.editor);
+    let offset = view.inner_height() / 2;
+    scroll_page_and_cursor(cx, offset, Direction::Backward);
+}
+
+fn cursor_page_half_down(cx: &mut Context) {
+    let view = view!(cx.editor);
+    let offset = view.inner_height() / 2;
+    scroll_page_and_cursor(cx, offset, Direction::Forward);
 }
 
 #[allow(deprecated)]
