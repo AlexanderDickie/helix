@@ -174,10 +174,10 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
         "A-:" => ensure_selections_forward,
 
         "esc" => normal_mode,
-        "C-b" | "pageup" => page_up,
-        "C-f" | "pagedown" => page_down,
-        "C-u" => half_page_up,
-        "C-d" => half_page_down,
+        "C-b" | "pageup" => cursor_page_up,
+        "C-f" | "pagedown" => cursor_page_down,
+        "C-u" => cursor_page_half_up,
+        "C-d" => cursor_page_half_down,
 
         "C-w" => { "Window"
             "C-w" | "w" => rotate_view,
