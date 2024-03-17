@@ -7,6 +7,8 @@ use helix_core::Uri;
 use helix_lsp::util::generate_transaction_from_edits;
 use helix_lsp::{lsp, OffsetEncoding};
 
+pub struct CopilotRequestCompletionEvent;
+
 pub enum CompletionEvent {
     /// Auto completion was triggered by typing a word char
     AutoTrigger {
