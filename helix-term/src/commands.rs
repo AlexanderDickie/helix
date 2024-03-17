@@ -276,7 +276,9 @@ impl MappableCommand {
 
     #[rustfmt::skip]
     static_commands!(
-        apply_copilot_completion, "Apply a copilot completion",
+        copilot_apply_completion, "Apply a copilot completion",
+        copilot_show_completion, "Show the copilot completion",
+        copilot_toggle_auto_render, "Toggle the automatic rendering of copilot completions",
         no_op, "Do nothing",
         move_char_left, "Move left",
         move_char_right, "Move right",
@@ -6280,7 +6282,7 @@ fn jump_to_label(cx: &mut Context, labels: Vec<Range>, behaviour: Movement) {
     });
 }
 
-fn apply_copilot_completion(cx: &mut Context) {
+fn copilot_apply_completion(cx: &mut Context) {
     let (view, doc) = current!(cx.editor);
     doc.apply_copilot_completion(view.id);
 }

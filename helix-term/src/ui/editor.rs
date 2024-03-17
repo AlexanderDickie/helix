@@ -28,11 +28,12 @@ use helix_view::{
     graphics::{Color, CursorKind, Modifier, Rect, Style},
     input::{KeyEvent, MouseButton, MouseEvent, MouseEventKind},
     keyboard::{KeyCode, KeyModifiers},
-    Document, Editor, Theme, View,
+    view, Document, Editor, Theme, View,
 };
 use std::{mem::take, num::NonZeroUsize, path::PathBuf, rc::Rc, sync::Arc};
 
 use tui::{buffer::Buffer as Surface, text::Span};
+use super::text_decorations::CopilotDecoration;
 
 pub struct EditorView {
     pub keymaps: Keymaps,
@@ -201,6 +202,13 @@ impl EditorView {
             inline_diagnostic_config,
             config.end_of_line_diagnostics,
         ));
+
+        decorations.add_decoration(CopilotDecoration::new(
+            doc,
+            doc.text_format(view.inner_width(doc), Some(&editor.theme)),
+            theme.get("ui.get.focused"),
+        ));
+
         render_document(
             surface,
             inner,
