@@ -17,6 +17,7 @@ use crate::job::{dispatch, dispatch_blocking};
 pub struct CopilotHandler {
     doc_id: Option<DocumentId>,
     cancel: Option<CancelTx>,
+    force_render: Option<bool>,
 }
 
 impl CopilotHandler {
@@ -24,6 +25,7 @@ impl CopilotHandler {
         Self {
             doc_id: None,
             cancel: None,
+            force_render: None,
         }
     }
 }
@@ -36,9 +38,10 @@ impl helix_event::AsyncHook for CopilotHandler {
         _: Option<Instant>,
     ) -> Option<Instant> {
         match event {
-            CopilotEvent::RequestCompletion { doc_id } => {
+            CopilotEvent::RequestCompletion { doc_id, force_render } => {
                 self.doc_id = Some(doc_id);
                 self.cancel.take();
+                self.force_render = Some(force_render);
                 Some(Instant::now() + Duration::from_millis(100))
             }
             CopilotEvent::CancelInFlightCompletion => {
@@ -50,16 +53,17 @@ impl helix_event::AsyncHook for CopilotHandler {
 
     fn finish_debounce(&mut self) {
         let Some(doc_id) = self.doc_id else {return;};
+        let Some(force_render) = self.force_render else {return;};
         let (tx, rx) = cancelation();
         self.cancel = Some(tx);
 
         dispatch_blocking(move |editor, _| {
-            copilot_completion(editor, doc_id, rx);
+            copilot_completion(editor, doc_id, force_render, rx);
         });
     }
 }
 
-fn copilot_completion(editor: &mut Editor, doc_id: DocumentId, cancel: CancelRx) {
+fn copilot_completion(editor: &mut Editor, doc_id: DocumentId, force_render: bool, cancel: CancelRx) {
     let (view, doc) = current_ref!(editor);
     if doc.id() != doc_id {
         return;
@@ -141,7 +145,7 @@ fn copilot_completion(editor: &mut Editor, doc_id: DocumentId, cancel: CancelRx)
                         .collect::<Vec<DocCompletion>>();
 
                     doc.copilot = Some(Copilot {
-                        should_render: editor.auto_render_copilot,
+                        should_render: force_render || editor.auto_render_copilot,
                         completions: doc_completion,
                         idx: 0,
                         offset_encoding,
@@ -155,9 +159,25 @@ fn copilot_completion(editor: &mut Editor, doc_id: DocumentId, cancel: CancelRx)
 
 pub(super) fn try_register_hooks(handlers: &Handlers) {
     let Some(copilot_handler) = handlers.copilot.clone() else {return;};
+    let tx = copilot_handler.clone();
 
-    register_hook!(move |event: &mut PostCommand<'_, '_>| {
+    register_hook!(move |event: &mut PostCommand<'_, '_>| {    
         if let MappableCommand::Static { name: "copilot_show_completion", .. } = event.command {
+            let (_, doc) = current!(event.cx.editor);
+
+            if doc.copilot.is_some() {
+                return Ok(());
+            }
+            
+            doc.clear_copilot_completions();
+            send_blocking(&tx, CopilotEvent::RequestCompletion { doc_id: doc.id(), force_render: true });
+            return Ok(());
+        };
+
+        if let MappableCommand::Static { name: "insert_newline", .. } = event.command {
+            let (_, doc) = current!(event.cx.editor);
+            doc.clear_copilot_completions();
+            send_blocking(&tx, CopilotEvent::RequestCompletion { doc_id: doc.id(), force_render: false });
             return Ok(());
         };
 
@@ -167,13 +187,14 @@ pub(super) fn try_register_hooks(handlers: &Handlers) {
     });
 
     let tx = copilot_handler.clone();
+
     register_hook!(move |event: &mut OnModeSwitch<'_, '_>| {
         let (_, doc) = current!(event.cx.editor);
         doc.clear_copilot_completions();
         if event.old_mode == Mode::Insert {
             send_blocking(&tx, CopilotEvent::CancelInFlightCompletion);
         } else if event.new_mode == Mode::Insert {
-            send_blocking(&tx, CopilotEvent::RequestCompletion { doc_id: doc.id() });
+            send_blocking(&tx, CopilotEvent::RequestCompletion { doc_id: doc.id(), force_render: false });
         }
         Ok(())
     });
@@ -182,7 +203,7 @@ pub(super) fn try_register_hooks(handlers: &Handlers) {
     register_hook!(move |event: &mut PostInsertChar<'_, '_>| {
         let (_, doc) = current!(event.cx.editor);
         doc.clear_copilot_completions();
-        send_blocking(&tx, CopilotEvent::RequestCompletion { doc_id: doc.id() });
+        send_blocking(&tx, CopilotEvent::RequestCompletion { doc_id: doc.id(), force_render: false });
         Ok(())
     });
 }

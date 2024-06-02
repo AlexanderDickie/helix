@@ -5,7 +5,10 @@ use helix_lsp::util::generate_transaction_from_edits;
 use helix_lsp::{lsp, OffsetEncoding};
 
 pub enum CopilotEvent {
-    RequestCompletion { doc_id: DocumentId },
+    RequestCompletion {
+        doc_id: DocumentId,
+        force_render: bool,
+    },
     CancelInFlightCompletion,
 }
 

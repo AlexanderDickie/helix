@@ -5921,7 +5921,11 @@ fn copilot_apply_completion(cx: &mut Context) {
 fn copilot_show_completion(cx: &mut Context) {
     let (_, doc) = current!(cx.editor);
     if let Some(copilot) = doc.copilot.as_mut() {
-        copilot.should_render = true;
+        if copilot.should_render {
+            copilot.idx = (copilot.idx + 1) % copilot.completions.len();
+        } else {
+            copilot.should_render = true;
+        }
     }
 }
 
