@@ -1,3 +1,38 @@
+# Fork of Helix which adds support for Github-copilot
+
+### To use:
+### 1. Setup the copilot-lsp using my helper script:
+
+1. Install [fish](https://fishshell.com/) (for my script), install [node.js](https://nodejs.org/en/download/) (which runs the copilot-lsp)
+
+2. Run `fish copilot.fish --create-lsp` 
+<br>This will download the copilot-lsp and put its in `/usr/local/bin/` (if you haven’t already)
+3. Run `fish copilot.fish --auth` 
+<br>This will create a github copilot-lsp access code in `~/.config/github-copilot/hosts.json` (if one doesn't already exist)
+
+### 2. Choose keybindings to map to these copilot-commands, for example:
+```
+[keys.insert]
+"C-w" = "copilot_apply_completion" 
+"C-e" = "copilot_show_completion"
+
+[keys.normal]
+"C-e" = "copilot_toggle_auto_render"
+
+[editor]
+copilot-auto-render = false # defaults to true if omitted
+```
+
+### 3. Run helix with copilot: `hx -a`
+
+With helix started with this flag ommited (eg `hx`), the copilot-lsp is not started at all and no completions are requested.
+
+With helix started with `hx -a`, copilot-completions are requested from the copilot-lsp when entering insert mode, and anytime that the document changes while in insert mode (typing a character, deleting a word etc).
+
+With `copilot-auto-render = true`, completions are rendered immediately after they are received from the copilot-lsp.
+
+With `copilot-auto-render = false`, a completion will only render if `copilot_show_completion` is pressed after the completion was first requested. This behaviour then resets after the next completion is requested.
+
 <div align="center">
 
 <h1>
